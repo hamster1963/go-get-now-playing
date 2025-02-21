@@ -6,6 +6,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/gogf/gf/v2/os/glog"
@@ -16,7 +17,8 @@ type MusicInfo struct {
 	TrackName  string `json:"track_name"`
 	ArtistName string `json:"artist_name"`
 	AlbumName  string `json:"album_name"`
-	AlbumCover string `json:"album_cover"` // 将存储 base64 编码的图片数据
+	AlbumCover string `json:"album_cover"`
+	Progress   string `json:"progress"` // 新增进度字段
 }
 
 func main() {
@@ -36,14 +38,15 @@ func main() {
 }
 
 func getAppleMusicInfo() (*MusicInfo, error) {
-	// 首先获取基本信息
+	// 修改基本信息脚本，添加进度获取
 	infoScript := `
 	tell application "Music"
 		if player state is playing then
 			set currentTrack to current track
-			return {name of currentTrack, artist of currentTrack, album of currentTrack}
+			set trackProgress to (player position / (duration of currentTrack)) * 100
+			return {name of currentTrack, artist of currentTrack, album of currentTrack, trackProgress}
 		else
-			return {"", "", ""}
+			return {"", "", "", 0}
 		end if
 	end tell
 	`
@@ -94,14 +97,22 @@ func getAppleMusicInfo() (*MusicInfo, error) {
 	}
 
 	result := strings.TrimSpace(string(output))
-	
-	// 解析基本信息
+
+	// 修改解析逻辑
 	result = strings.TrimPrefix(result, "{")
 	result = strings.TrimSuffix(result, "}")
 	parts := strings.Split(result, ", ")
-	
-	if len(parts) < 3 || parts[0] == "" {
+
+	if len(parts) < 4 || parts[0] == "" {
 		return &MusicInfo{IsPlaying: false}, nil
+	}
+
+	// 解析进度百分比
+	progress := 0.0
+	if progressStr := strings.TrimSpace(parts[3]); progressStr != "" {
+		if p, err := strconv.ParseFloat(progressStr, 64); err == nil {
+			progress = p
+		}
 	}
 
 	// 获取专辑封面
@@ -120,6 +131,7 @@ func getAppleMusicInfo() (*MusicInfo, error) {
 		ArtistName: strings.Trim(parts[1], "\""),
 		AlbumName:  strings.Trim(parts[2], "\""),
 		AlbumCover: coverDataStr,
+		Progress:   fmt.Sprintf("%.2f", progress),
 	}
 
 	return musicInfo, nil

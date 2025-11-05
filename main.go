@@ -38,15 +38,18 @@ func main() {
 }
 
 func getAppleMusicInfo() (*MusicInfo, error) {
-	// 修改基本信息脚本，添加进度获取
+	// 修改基本信息脚本，使用特殊分隔符避免逗号冲突
 	infoScript := `
 	tell application "Music"
 		if player state is playing then
 			set currentTrack to current track
 			set trackProgress to (player position / (duration of currentTrack)) * 100
-			return {name of currentTrack, artist of currentTrack, album of currentTrack, trackProgress}
+			set trackName to name of currentTrack
+			set artistName to artist of currentTrack
+			set albumName to album of currentTrack
+			return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackProgress
 		else
-			return {"", "", "", 0}
+			return ""
 		end if
 	end tell
 	`
@@ -98,10 +101,13 @@ func getAppleMusicInfo() (*MusicInfo, error) {
 
 	result := strings.TrimSpace(string(output))
 
-	// 修改解析逻辑
-	result = strings.TrimPrefix(result, "{")
-	result = strings.TrimSuffix(result, "}")
-	parts := strings.Split(result, ", ")
+	// 如果没有播放，返回空信息
+	if result == "" {
+		return &MusicInfo{IsPlaying: false}, nil
+	}
+
+	// 使用特殊分隔符 ||| 进行分割
+	parts := strings.Split(result, "|||")
 
 	if len(parts) < 4 || parts[0] == "" {
 		return &MusicInfo{IsPlaying: false}, nil
@@ -127,9 +133,9 @@ func getAppleMusicInfo() (*MusicInfo, error) {
 
 	musicInfo := &MusicInfo{
 		IsPlaying:  true,
-		TrackName:  strings.Trim(parts[0], "\""),
-		ArtistName: strings.Trim(parts[1], "\""),
-		AlbumName:  strings.Trim(parts[2], "\""),
+		TrackName:  strings.TrimSpace(parts[0]),
+		ArtistName: strings.TrimSpace(parts[1]),
+		AlbumName:  strings.TrimSpace(parts[2]),
 		AlbumCover: coverDataStr,
 		Progress:   fmt.Sprintf("%.2f", progress),
 	}

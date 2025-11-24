@@ -38,58 +38,70 @@ func main() {
 }
 
 func getAppleMusicInfo() (*MusicInfo, error) {
-	// 修改基本信息脚本，使用特殊分隔符避免逗号冲突
+	// 修改基本信息脚本，使用特殊分隔符避免逗号冲突，并检查Music是否运行
 	infoScript := `
-	tell application "Music"
-		if player state is playing then
-			set currentTrack to current track
-			set trackProgress to (player position / (duration of currentTrack)) * 100
-			set trackName to name of currentTrack
-			set artistName to artist of currentTrack
-			set albumName to album of currentTrack
-			return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackProgress
+	tell application "System Events"
+		if exists process "Music" then
+			tell application "Music"
+				if player state is playing then
+					set currentTrack to current track
+					set trackProgress to (player position / (duration of currentTrack)) * 100
+					set trackName to name of currentTrack
+					set artistName to artist of currentTrack
+					set albumName to album of currentTrack
+					return trackName & "|||" & artistName & "|||" & albumName & "|||" & trackProgress
+				else
+					return ""
+				end if
+			end tell
 		else
 			return ""
 		end if
 	end tell
 	`
 
-	// 获取专辑封面
+	// 获取专辑封面，并检查Music是否运行
 	artworkScript := `
-	tell application "Music"
-		try
-			if player state is not stopped then
-				set currentTrack to current track
-				tell artwork 1 of currentTrack
-					if format is JPEG picture then
-						set imgFormat to ".jpg"
-					else
-						set imgFormat to ".png"
-					end if
-				end tell
-				
-				set tempPath to (POSIX path of (path to temporary items)) & "temp" & imgFormat
-				set rawData to raw data of artwork 1 of currentTrack
-				
+	tell application "System Events"
+		if exists process "Music" then
+			tell application "Music"
 				try
-					set fileRef to (open for access POSIX file tempPath with write permission)
-					write rawData to fileRef starting at 0
-					close access fileRef
-					
-					set coverData to (do shell script "base64 < " & quoted form of tempPath)
-					do shell script "rm " & quoted form of tempPath
-					return coverData
-				on error errMsg
-					log errMsg
-					try
-						close access fileRef
-					end try
+					if player state is not stopped then
+						set currentTrack to current track
+						tell artwork 1 of currentTrack
+							if format is JPEG picture then
+								set imgFormat to ".jpg"
+							else
+								set imgFormat to ".png"
+							end if
+						end tell
+						
+						set tempPath to (POSIX path of (path to temporary items)) & "temp" & imgFormat
+						set rawData to raw data of artwork 1 of currentTrack
+						
+						try
+							set fileRef to (open for access POSIX file tempPath with write permission)
+							write rawData to fileRef starting at 0
+							close access fileRef
+							
+							set coverData to (do shell script "base64 < " & quoted form of tempPath)
+							do shell script "rm " & quoted form of tempPath
+							return coverData
+						on error errMsg
+							log errMsg
+							try
+								close access fileRef
+							end try
+							return ""
+						end try
+					end if
+				on error
 					return ""
 				end try
-			end if
-		on error
+			end tell
+		else
 			return ""
-		end try
+		end if
 	end tell
 	`
 
